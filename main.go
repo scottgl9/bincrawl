@@ -6,6 +6,7 @@ package main
 //         "bytes"
          "fmt"
 //         "io/ioutil"
+	 "regexp"
          "math"
          "os"
          "strings"
@@ -43,6 +44,8 @@ package main
 
          blocks := uint64(math.Ceil(float64(filesize) / float64(fileChunk)))
 
+	 r, _ := regexp.Compile("(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{4})\\n")
+
          // we scan the file for Signature block by block
          for i := uint64(0); i < blocks; i++ {
 
@@ -52,7 +55,9 @@ package main
                  fmt.Printf("Scanning block #%d , size of %d\n", i, blocksize)
 
                  file.Read(buf)
-
+		 if r.MatchString(string(buf)) {
+			fmt.Println(r.FindAllString(string(buf),-1))
+		 }
                  if strings.Contains(string(buf), string(startSignature)) {
                          //fmt.Println(string(buf))
                          fmt.Println("Found at block # : ", i)
