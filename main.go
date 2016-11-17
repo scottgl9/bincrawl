@@ -4,20 +4,17 @@ package main
 
  import (
 //         "bytes"
+	 "encoding/base64"
          "fmt"
-//         "io/ioutil"
+         "io/ioutil"
 	 "regexp"
          "math"
          "os"
+         "strconv"
          "strings"
  )
 
  const fileChunk = 8192
-
- var (
-         startSignature = "-----BEGIN\x20CERTIFICATE"
-         endSignature   = "END\x20CERTIFICATE-----"
- )
 
  func main() {
          if len(os.Args) != 2 {
@@ -44,7 +41,10 @@ package main
 
          blocks := uint64(math.Ceil(float64(filesize) / float64(fileChunk)))
 
-	 r, _ := regexp.Compile("(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{4})\\n")
+	// matches base64 strings
+	r, _ := regexp.Compile("(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{4})")
+
+	r2, _ := regexp.Compile("-+BEGIN CERTIFICATE-+\n(?:[^-]*\n)+-+END CERTIFICATE-+")
 
          // we scan the file for Signature block by block
          for i := uint64(0); i < blocks; i++ {
@@ -52,26 +52,27 @@ package main
                  blocksize := int(math.Min(fileChunk, float64(filesize-int64(i*fileChunk))))
                  buf := make([]byte, blocksize)
 
-                 fmt.Printf("Scanning block #%d , size of %d\n", i, blocksize)
+                 //fmt.Printf("Scanning block #%d , size of %d\n", i, blocksize)
 
                  file.Read(buf)
-		 if r.MatchString(string(buf)) {
-			fmt.Println(r.FindAllString(string(buf),-1))
+
+		 // scan for PEM format cert
+		 if r2.MatchString(string(buf)) {
+			for _, each := range r2.FindAllString(string(buf),-1) {
+				ioutil.WriteFile("data/"+strconv.FormatUint(i, 10)+".cer", []byte(each), 0644)
+				fmt.Println(each)
+			}
 		 }
-                 if strings.Contains(string(buf), string(startSignature)) {
-                         //fmt.Println(string(buf))
-                         fmt.Println("Found at block # : ", i)
 
-                         // we want to find the out start and end positions of the signature
-                         start := strings.Index(string(buf), startSignature)
-                         end := strings.LastIndex(string(buf), endSignature)
-                         foundSize := ((end - start) + len(endSignature))
-                         fmt.Println("Detected size is : ", foundSize)
-
-                         startPosition := (i * fileChunk) + uint64(start)
-                         endPosition := startPosition + uint64(foundSize)
-                         fmt.Println("Start position : ", startPosition)
-                         fmt.Println("End position : ", endPosition)
-                 }
+		 if r.MatchString(string(buf)) {
+			// scan for strings which look like base64, then verify that it is base64
+			var str = strings.Replace(string(buf), "\n", "", -1)
+			for _, each := range r.FindAllString(str,-1) {
+			        _, err := base64.StdEncoding.DecodeString(each)
+				if err == nil && len(each) > 10 {
+					//fmt.Println(each)
+				}
+			}
+		 }
          }
  }
