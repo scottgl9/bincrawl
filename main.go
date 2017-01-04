@@ -45,6 +45,7 @@ package main
 	r, _ := regexp.Compile("(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{4})")
 
 	r2, _ := regexp.Compile("-+BEGIN CERTIFICATE-+\n(?:[^-]*\n)+-+END CERTIFICATE-+")
+	r3, _ := regexp.Compile("-+BEGIN RSA (PRIVATE|PUBLIC) KEY-+\n(?:[^-]*\n)+-+END RSA (PRIVATE|PUBLIC) KEY-+")
 
          // we scan the file for Signature block by block
          for i := uint64(0); i < blocks; i++ {
@@ -64,12 +65,21 @@ package main
 			}
 		 }
 
+                 // scan for PEM format RSA public/private key
+                 if r3.MatchString(string(buf)) {
+                        for _, each := range r3.FindAllString(string(buf),-1) {
+                                ioutil.WriteFile("data/"+strconv.FormatUint(i, 10)+".cer", []byte(each), 0644)
+                                fmt.Println(each)
+                        }
+                 }
+
+
 		 if r.MatchString(string(buf)) {
 			// scan for strings which look like base64, then verify that it is base64
 			var str = strings.Replace(string(buf), "\n", "", -1)
 			for _, each := range r.FindAllString(str,-1) {
 			        _, err := base64.StdEncoding.DecodeString(each)
-				if err == nil && len(each) > 10 {
+				if err == nil && len(each) > 32 {
 					//fmt.Println(each)
 				}
 			}
