@@ -5,6 +5,7 @@ package main
  import (
 //         "bytes"
 	 "encoding/base64"
+         "flag"
          "fmt"
          "io/ioutil"
 	 "regexp"
@@ -16,17 +17,23 @@ package main
 
  const fileChunk = 8192
 
+var inValue = flag.String("invalue", "", "Value to scan file for")
+var inForm = flag.String("inform", "str", "Data format of invalue (b64, hex, str)")
+var fileToScan = flag.String("filename", "", "Name of file to scan.")
+var scanPem = flag.Bool("scanpem", false, "Scan for PEM format cert in file")
+var scanBase64 = flag.Bool("scanb64", false, "Scan for strings which match Base64 encoded requirements")
+
  func main() {
-         if len(os.Args) != 2 {
-                 fmt.Printf("Usage : %s <filename to scan> \n", os.Args[0])
-                 os.Exit(0)
+         flag.Parse()
+
+         if (*fileToScan == "") {
+             flag.PrintDefaults()
+             os.Exit(0)
          }
 
-         fileToScan := os.Args[1]
+         fmt.Printf("Scanning %s....\n", *fileToScan)
 
-         fmt.Printf("Scanning %s....\n", fileToScan)
-
-         file, err := os.Open(fileToScan)
+         file, err := os.Open(*fileToScan)
          if err != nil {
                  fmt.Println("Unable to open file : ", err)
                  os.Exit(-1)
@@ -58,7 +65,7 @@ package main
                  file.Read(buf)
 
 		 // scan for PEM format cert
-		 if r2.MatchString(string(buf)) {
+		 if *scanPem && r2.MatchString(string(buf)) {
 			for _, each := range r2.FindAllString(string(buf),-1) {
 				ioutil.WriteFile("data/"+strconv.FormatUint(i, 10)+".cer", []byte(each), 0644)
 				fmt.Println(each)
@@ -66,7 +73,7 @@ package main
 		 }
 
                  // scan for PEM format RSA public/private key
-                 if r3.MatchString(string(buf)) {
+                 if *scanPem && r3.MatchString(string(buf)) {
                         for _, each := range r3.FindAllString(string(buf),-1) {
                                 ioutil.WriteFile("data/"+strconv.FormatUint(i, 10)+".cer", []byte(each), 0644)
                                 fmt.Println(each)
@@ -74,7 +81,7 @@ package main
                  }
 
 
-		 if r.MatchString(string(buf)) {
+		 if *scanBase64 && r.MatchString(string(buf)) {
 			// scan for strings which look like base64, then verify that it is base64
 			var str = strings.Replace(string(buf), "\n", "", -1)
 			for _, each := range r.FindAllString(str,-1) {
