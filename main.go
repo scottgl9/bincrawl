@@ -3,7 +3,8 @@
 package main
 
  import (
-//         "bytes"
+	 "encoding/binary"
+         "bytes"
 	 "encoding/base64"
          "flag"
          "fmt"
@@ -63,7 +64,20 @@ var scanBase64 = flag.Bool("scanb64", false, "Scan for strings which match Base6
                  //fmt.Printf("Scanning block #%d , size of %d\n", i, blocksize)
 
                  file.Read(buf)
-
+		 if bytes.Contains(buf, []byte("\x30\x82")) {
+			var length uint16
+			//curpos := 0
+			//while true {
+			pos := bytes.Index(buf, []byte("\x30\x82"))
+			if bytes.Equal(buf[pos+4:pos+6], []byte("\x30\x82")) {
+				err := binary.Read(bytes.NewReader(buf[pos+2:pos+4]), binary.BigEndian, &length)
+				if err != nil {
+					fmt.Println("binary.Read failed:", err)
+				}
+				fmt.Printf("Found DER cert: %d\n", length)
+			}
+			//}
+		 }
 		 // scan for PEM format cert
 		 if *scanPem && r2.MatchString(string(buf)) {
 			for _, each := range r2.FindAllString(string(buf),-1) {
