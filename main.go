@@ -54,7 +54,7 @@ var scanBase64 = flag.Bool("scanb64", false, "Scan for strings which match Base6
 
 	r2, _ := regexp.Compile("-+BEGIN CERTIFICATE-+\n(?:[^-]*\n)+-+END CERTIFICATE-+")
 	r3, _ := regexp.Compile("-+BEGIN RSA (PRIVATE|PUBLIC) KEY-+\n(?:[^-]*\n)+-+END RSA (PRIVATE|PUBLIC) KEY-+")
-
+	cnt:=0
          // we scan the file for Signature block by block
          for i := uint64(0); i < blocks; i++ {
 
@@ -66,17 +66,39 @@ var scanBase64 = flag.Bool("scanb64", false, "Scan for strings which match Base6
                  file.Read(buf)
 		 if bytes.Contains(buf, []byte("\x30\x82")) {
 			var length uint16
-			//curpos := 0
-			//while true {
-			pos := bytes.Index(buf, []byte("\x30\x82"))
-			if bytes.Equal(buf[pos+4:pos+6], []byte("\x30\x82")) {
-				err := binary.Read(bytes.NewReader(buf[pos+2:pos+4]), binary.BigEndian, &length)
-				if err != nil {
-					fmt.Println("binary.Read failed:", err)
+			tmpbuf := buf
+			for {
+				pos := bytes.Index(tmpbuf, []byte("\x30\x82"))
+				if pos == -1 { break }
+				if bytes.Equal(tmpbuf[pos+4:pos+6], []byte("\x30\x82")) {
+					err := binary.Read(bytes.NewReader(tmpbuf[pos+2:pos+4]), binary.BigEndian, &length)
+					if err != nil {
+						fmt.Println("binary.Read failed:", err)
+					}
+					fmt.Printf("Found DER cert: %d\n", length)
+					if (len(tmpbuf) <= pos+8+int(length)) {
+						fmt.Printf("Cert spans block boundary\n")
+					}
+					//file.Seek(-len(buf), 1)
+
+					if len(tmpbuf) > (pos+int(length)) {
+						ioutil.WriteFile("data/"+strconv.FormatUint(uint64(cnt), 10)+".der", tmpbuf[pos:pos+int(length)], 0644)
+					} else {
+						// data is spanning two blocks
+						//part1 := tmpbuf[pos:]
+						//file.Read(buf)
+						//part2 := buf[0:int(length) + 5 - len(part1)]
+						//whole := append(part1, part2...)
+						//ioutil.WriteFile("data/"+strconv.FormatUint(uint64(cnt), 10)+".der", whole, 0644)
+					}
+					cnt = cnt + 1
+					if (len(tmpbuf) <= pos+8+int(length)) { break }
+					tmpbuf = tmpbuf[pos+8:]
+				} else {
+					if (len(tmpbuf) <= pos+8) { break }
+					tmpbuf = tmpbuf[pos+8:]
 				}
-				fmt.Printf("Found DER cert: %d\n", length)
 			}
-			//}
 		 }
 		 // scan for PEM format cert
 		 if *scanPem && r2.MatchString(string(buf)) {
