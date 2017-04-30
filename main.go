@@ -4,6 +4,7 @@ package main
 
  import (
 	 "encoding/binary"
+	 "encoding/hex"
          "bytes"
 	 "encoding/base64"
          "flag"
@@ -23,6 +24,7 @@ var inForm = flag.String("inform", "str", "Data format of invalue (b64, hex, str
 var fileToScan = flag.String("filename", "", "Name of file to scan.")
 var scanPem = flag.Bool("scanpem", false, "Scan for PEM format cert in file")
 var scanBase64 = flag.Bool("scanb64", false, "Scan for strings which match Base64 encoded requirements")
+var scanDer = flag.Bool("scander", false, "Scan for DER format cert in file")
 
  func main() {
          flag.Parse()
@@ -64,7 +66,24 @@ var scanBase64 = flag.Bool("scanb64", false, "Scan for strings which match Base6
                  //fmt.Printf("Scanning block #%d , size of %d\n", i, blocksize)
 
                  file.Read(buf)
-		 if bytes.Contains(buf, []byte("\x30\x82")) {
+
+
+		 if *inValue != "" {
+			if *inForm == "hex" {
+				data, _ := hex.DecodeString(*inValue)
+				if bytes.Contains(buf, data) {
+					pos := (int(i) * blocksize) + bytes.Index(buf, data);
+					fmt.Printf("Found binary form of hex %v in %v at offset %X\n", *inValue, *fileToScan, pos);
+				}
+				b64str := base64.StdEncoding.EncodeToString(data)
+                                if bytes.Contains(buf, []byte(b64str)) {
+					pos := (int(i) * blocksize) + bytes.Index(buf, []byte(b64str));
+					fmt.Printf("Found base64 encoded binary form of hex %v in %v at offset %X\n", *inValue, *fileToScan, pos)
+				}
+			}
+		 }
+
+		 if *scanDer && bytes.Contains(buf, []byte("\x30\x82")) {
 			var length uint16
 			tmpbuf := buf
 			for {
