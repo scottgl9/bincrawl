@@ -29,7 +29,7 @@ var scanDer = flag.Bool("scander", false, "Scan for DER format cert in file")
 
 
 func scanFile(filename string) {
-         fmt.Printf("Scanning %s....\n", filename)
+         //fmt.Printf("Scanning %s....\n", filename)
 
          file, err := os.Open(filename)
          if err != nil {
@@ -70,20 +70,46 @@ func scanFile(filename string) {
 					pos := (int(i) * blocksize) + bytes.Index(buf, []byte(hexstr));
 					fmt.Printf("Found string form of hex %v in %v at offset %X\n", hexstr, filename, pos);
 				}
+				b64str := base64.StdEncoding.EncodeToString([]byte(hexstr))
+				b64str = strings.Replace(b64str, "=", "", -1)
+				if bytes.Contains(buf, []byte(b64str)) {
+					print("b64str="+b64str)
+					pos := (int(i) * blocksize) + bytes.Index(buf, []byte(b64str));
+					fmt.Printf("Found base64 encoded hex form %v in %v at offset %X\n", b64str, filename, pos)
+				}
+
 				hexstr = strings.ToUpper(*inValue)
 				if bytes.Contains(buf, []byte(hexstr)) {
 					pos := (int(i) * blocksize) + bytes.Index(buf, []byte(hexstr));
 					fmt.Printf("Found string form of hex %v in %v at offset %X\n", hexstr, filename, pos);
 				}
+				b64str = base64.StdEncoding.EncodeToString([]byte(hexstr))
+				b64str = strings.Replace(b64str, "=", "", -1)
+				if bytes.Contains(buf, []byte(b64str)) {
+					print("b64str="+b64str)
+					pos := (int(i) * blocksize) + bytes.Index(buf, []byte(b64str));
+					fmt.Printf("Found base64 encoded hex form %v in %v at offset %X\n", b64str, filename, pos)
+				}
+
 				data, _ := hex.DecodeString(*inValue)
 				if bytes.Contains(buf, data) {
 					pos := (int(i) * blocksize) + bytes.Index(buf, data);
-					fmt.Printf("Found binary form of hex %v in %v at offset %X\n", *inValue, filename, pos);
+					fmt.Printf("Found binary form of hex in %v at offset %X\n", filename, pos);
 				}
-				b64str := strings.Trim(base64.StdEncoding.EncodeToString(data),"=")
-                                if bytes.Contains(buf, []byte(b64str)) {
+				b64str = base64.StdEncoding.EncodeToString(data)
+				b64str = strings.Replace(b64str, "=", "", -1)
+				if bytes.Contains(buf, []byte(b64str)) {
+					print("b64str="+b64str)
 					pos := (int(i) * blocksize) + bytes.Index(buf, []byte(b64str));
-					fmt.Printf("Found base64 encoded binary form of hex %v in %v at offset %X\n", *inValue, filename, pos)
+					fmt.Printf("Found base64 encoded binary form %v in %v at offset %X\n", b64str, filename, pos)
+				}
+				// base64 encode it again, and see if we can find that
+				b64str = base64.StdEncoding.EncodeToString([]byte(b64str))
+				b64str = strings.Replace(b64str, "=", "", -1)
+				if bytes.Contains(buf, []byte(b64str)) {
+					print("b64str="+b64str)
+					pos := (int(i) * blocksize) + bytes.Index(buf, []byte(b64str));
+					fmt.Printf("Found double base64 encoded binary form %v in %v at offset %X\n", b64str, filename, pos)
 				}
 			}
 		 }
