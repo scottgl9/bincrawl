@@ -111,6 +111,33 @@ func scanFile(filename string) {
 					pos := (int(i) * blocksize) + bytes.Index(buf, []byte(b64str));
 					fmt.Printf("Found double base64 encoded binary form %v in %v at offset %X\n", b64str, filename, pos)
 				}
+			} else if *inForm == "str" {
+				hexstr := strings.ToLower(*inValue)
+				if bytes.Contains(buf, []byte(hexstr)) {
+					pos := (int(i) * blocksize) + bytes.Index(buf, []byte(hexstr));
+					fmt.Printf("Found string form of str %v in %v at offset %X\n", hexstr, filename, pos);
+				}
+				b64str := base64.StdEncoding.EncodeToString([]byte(hexstr))
+				b64str = strings.Replace(b64str, "=", "", -1)
+				if bytes.Contains(buf, []byte(b64str)) {
+					print("b64str="+b64str)
+					pos := (int(i) * blocksize) + bytes.Index(buf, []byte(b64str));
+					fmt.Printf("Found base64 encoded str form %v in %v at offset %X\n", b64str, filename, pos)
+				}
+
+				hexstr = strings.ToUpper(*inValue)
+				if bytes.Contains(buf, []byte(hexstr)) {
+					pos := (int(i) * blocksize) + bytes.Index(buf, []byte(hexstr));
+					fmt.Printf("Found string form of str %v in %v at offset %X\n", hexstr, filename, pos);
+				}
+				b64str = base64.StdEncoding.EncodeToString([]byte(hexstr))
+				b64str = strings.Replace(b64str, "=", "", -1)
+				if bytes.Contains(buf, []byte(b64str)) {
+					print("b64str="+b64str)
+					pos := (int(i) * blocksize) + bytes.Index(buf, []byte(b64str));
+					fmt.Printf("Found base64 encoded str form %v in %v at offset %X\n", b64str, filename, pos)
+				}
+
 			}
 		 }
 
