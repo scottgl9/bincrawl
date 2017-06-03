@@ -5,99 +5,112 @@ package main
  import (
 	 "encoding/binary"
 	 "encoding/hex"
-         "bytes"
+	 "bufio"
+     "bytes"
 	 "encoding/base64"
-         "flag"
-         "fmt"
-         "io/ioutil"
-         "path/filepath"
+     "flag"
+     "fmt"
+     "io"
+     "io/ioutil"
+     "path/filepath"
 	 "regexp"
-         "math"
-         "os"
-         "strconv"
-         "strings"
+     "math"
+     "os"
+     "strconv"
+     "strings"
  )
 
- const fileChunk = 8192
+const fileChunk = 8192
 
 var inValue = flag.String("invalue", "", "Value to scan file for")
 var inForm = flag.String("inform", "str", "Data format of invalue (b64, hex, str)")
+var inFile = flag.String("infile", "", "file containing list of input values (b64, hex, or str)")
 var fileToScan = flag.String("filename", "", "Name of file to scan.")
 var scanPem = flag.Bool("scanpem", false, "Scan for PEM format cert in file")
 var scanBase64 = flag.Bool("scanb64", false, "Scan for strings which match Base64 encoded requirements")
 var scanDer = flag.Bool("scander", false, "Scan for DER format cert in file")
 
-
 func scanFile(filename string) {
-         //fmt.Printf("Scanning %s....\n", filename)
+	strlist := []string{}
+        //fmt.Printf("Scanning %s....\n", filename)
+	if *inFile != "" {
+		f, err := os.Open(*inFile)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		defer f.Close()
+		r := bufio.NewReader(f)
+		line, err := r.ReadString('\n')    // line defined once
+		for err != io.EOF {
+			line = strings.Replace(line, "\n", "", -1)
+			strlist = append(strlist, line)
+			line, err = r.ReadString('\n') //  line was defined before
+		}
+	}
 
-         file, err := os.Open(filename)
-         if err != nil {
-                 fmt.Println("Unable to open file : ", err)
-                 os.Exit(-1)
-         }
+	file, err := os.Open(filename)
+	if err != nil {
+		fmt.Println("Unable to open file : ", err)
+		os.Exit(-1)
+	}
+	defer file.Close()
 
-         defer file.Close()
+	// calculate the file size
+	info, _ := file.Stat()
+	filesize := info.Size()
+	blocks := uint64(math.Ceil(float64(filesize) / float64(fileChunk)))
 
-         // calculate the file size
-         info, _ := file.Stat()
+	// matches base64 strings
+	r, _ := regexp.Compile("(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{4})")
+	r2, _ := regexp.Compile("-+BEGIN CERTIFICATE-+\n(?:[^-]*\n)+-+END CERTIFICATE-+")
+	r3, _ := regexp.Compile("-+BEGIN RSA (PRIVATE|PUBLIC) KEY-+\n(?:[^-]*\n)+-+END RSA (PRIVATE|PUBLIC) KEY-+")
+	cnt:=0
+	// we scan the file for Signature block by block
+	for i := uint64(0); i < blocks; i++ {
+		blocksize := int(math.Min(fileChunk, float64(filesize-int64(i*fileChunk))))
+		buf := make([]byte, blocksize)
+		//fmt.Printf("Scanning block #%d , size of %d\n", i, blocksize)
+		file.Read(buf)
 
-         filesize := info.Size()
-
-         blocks := uint64(math.Ceil(float64(filesize) / float64(fileChunk)))
-
-		// matches base64 strings
-		r, _ := regexp.Compile("(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{4})")
-
-		r2, _ := regexp.Compile("-+BEGIN CERTIFICATE-+\n(?:[^-]*\n)+-+END CERTIFICATE-+")
-		r3, _ := regexp.Compile("-+BEGIN RSA (PRIVATE|PUBLIC) KEY-+\n(?:[^-]*\n)+-+END RSA (PRIVATE|PUBLIC) KEY-+")
-		cnt:=0
-         // we scan the file for Signature block by block
-         for i := uint64(0); i < blocks; i++ {
-
-                 blocksize := int(math.Min(fileChunk, float64(filesize-int64(i*fileChunk))))
-                 buf := make([]byte, blocksize)
-
-                 //fmt.Printf("Scanning block #%d , size of %d\n", i, blocksize)
-
-                 file.Read(buf)
-
-
-		 if *inValue != "" {
+		if *inValue != "" {
+			strlist = append(strlist, *inValue)
+		}
+		for _, strval := range strlist {
 			if *inForm == "hex" {
-				hexstr := strings.ToLower(*inValue)
+				hexstr := strings.ToLower(strval)
 				if bytes.Contains(buf, []byte(hexstr)) {
-					pos := (int(i) * blocksize) + bytes.Index(buf, []byte(hexstr));
-					fmt.Printf("Found string form of hex %v in %v at offset %X\n", hexstr, filename, pos);
+					pos := (int(i) * blocksize) + bytes.Index(buf, []byte(hexstr))
+					fmt.Printf("Found string form of hex %v in %v at offset %X\n", hexstr, filename, pos)
 				}
 				b64str := base64.StdEncoding.EncodeToString([]byte(hexstr))
 				b64str = strings.Replace(b64str, "=", "", -1)
 				if bytes.Contains(buf, []byte(b64str)) {
-					pos := (int(i) * blocksize) + bytes.Index(buf, []byte(b64str));
+					pos := (int(i) * blocksize) + bytes.Index(buf, []byte(b64str))
 					fmt.Printf("Found base64 encoded hex form %v in %v at offset %X\n", b64str, filename, pos)
 				}
 
-				hexstr = strings.ToUpper(*inValue)
+				hexstr = strings.ToUpper(strval)
 				if bytes.Contains(buf, []byte(hexstr)) {
-					pos := (int(i) * blocksize) + bytes.Index(buf, []byte(hexstr));
-					fmt.Printf("Found string form of hex %v in %v at offset %X\n", hexstr, filename, pos);
+					pos := (int(i) * blocksize) + bytes.Index(buf, []byte(hexstr))
+					fmt.Printf("Found string form of hex %v in %v at offset %X\n", hexstr, filename, pos)
 				}
 				b64str = base64.StdEncoding.EncodeToString([]byte(hexstr))
 				b64str = strings.Replace(b64str, "=", "", -1)
 				if bytes.Contains(buf, []byte(b64str)) {
-					pos := (int(i) * blocksize) + bytes.Index(buf, []byte(b64str));
+					pos := (int(i) * blocksize) + bytes.Index(buf, []byte(b64str))
 					fmt.Printf("Found base64 encoded hex form %v in %v at offset %X\n", b64str, filename, pos)
 				}
 
-				data, _ := hex.DecodeString(*inValue)
+				data, _ := hex.DecodeString(strval)
 				if bytes.Contains(buf, data) {
 					pos := (int(i) * blocksize) + bytes.Index(buf, data);
-					fmt.Printf("Found binary form of hex in %v at offset %X\n", filename, pos);
+					fmt.Printf("Found binary form of hex in %v at offset %X\n", filename, pos)
 				}
 				b64str = base64.StdEncoding.EncodeToString(data)
 				b64str = strings.Replace(b64str, "=", "", -1)
 				if bytes.Contains(buf, []byte(b64str)) {
-					pos := (int(i) * blocksize) + bytes.Index(buf, []byte(b64str));
+					pos := (int(i) * blocksize) + bytes.Index(buf, []byte(b64str))
 					fmt.Printf("Found base64 encoded binary form %v in %v at offset %X\n", b64str, filename, pos)
 				}
 				// base64 encode it again, and see if we can find that
@@ -108,7 +121,7 @@ func scanFile(filename string) {
 					fmt.Printf("Found double base64 encoded binary form %v in %v at offset %X\n", b64str, filename, pos)
 				}
 			} else if *inForm == "str" {
-				hexstr := strings.ToLower(*inValue)
+				hexstr := strings.ToLower(strval)
 				if bytes.Contains(buf, []byte(hexstr)) {
 					pos := (int(i) * blocksize) + bytes.Index(buf, []byte(hexstr));
 					fmt.Printf("Found string form of str %v in %v at offset %X\n", hexstr, filename, pos);
@@ -120,7 +133,7 @@ func scanFile(filename string) {
 					fmt.Printf("Found base64 encoded str form %v in %v at offset %X\n", b64str, filename, pos)
 				}
 
-				hexstr = strings.ToUpper(*inValue)
+				hexstr = strings.ToUpper(strval)
 				if bytes.Contains(buf, []byte(hexstr)) {
 					pos := (int(i) * blocksize) + bytes.Index(buf, []byte(hexstr));
 					fmt.Printf("Found string form of str %v in %v at offset %X\n", hexstr, filename, pos);
@@ -131,11 +144,10 @@ func scanFile(filename string) {
 					pos := (int(i) * blocksize) + bytes.Index(buf, []byte(b64str));
 					fmt.Printf("Found base64 encoded str form %v in %v at offset %X\n", b64str, filename, pos)
 				}
-
 			}
-		 }
+		}
 
-		 if *scanDer && bytes.Contains(buf, []byte("\x30\x82")) {
+		if *scanDer && bytes.Contains(buf, []byte("\x30\x82")) {
 			var length uint16
 			tmpbuf := buf
 			for {
@@ -187,7 +199,6 @@ func scanFile(filename string) {
                         }
                  }
 
-
 		 if *scanBase64 && r.MatchString(string(buf)) {
 			// scan for strings which look like base64, then verify that it is base64
 			var str = strings.Replace(string(buf), "\n", "", -1)
@@ -197,7 +208,7 @@ func scanFile(filename string) {
 					//fmt.Println(each)
 				}
 			}
-		 }
+		}
 	}
 }
 
@@ -245,4 +256,4 @@ func main() {
 		} else {
 			scanFile(*fileToScan)
 		}
- }
+}
